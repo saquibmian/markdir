@@ -1,4 +1,4 @@
-package main
+package markdir
 
 import (
 	"strings"
@@ -6,7 +6,7 @@ import (
 	xhtml "golang.org/x/net/html"
 )
 
-type TocEntry struct {
+type tocEntry struct {
 	Level int
 	ID    string
 	Text  string
@@ -15,8 +15,8 @@ type TocEntry struct {
 // extractTOC walks the parsed document collecting h1-h6 headings that carry
 // an id (headings without one can't be linked), plus the text of the first
 // h1 ("" if none).
-func extractTOC(doc *xhtml.Node) ([]TocEntry, string) {
-	var toc []TocEntry
+func extractTOC(doc *xhtml.Node) ([]tocEntry, string) {
+	var toc []tocEntry
 	firstH1 := ""
 	var walk func(*xhtml.Node)
 	walk = func(n *xhtml.Node) {
@@ -29,7 +29,7 @@ func extractTOC(doc *xhtml.Node) ([]TocEntry, string) {
 			}
 			text := strings.TrimSpace(nodeText(n))
 			if id != "" {
-				toc = append(toc, TocEntry{Level: int(n.Data[1] - '0'), ID: id, Text: text})
+				toc = append(toc, tocEntry{Level: int(n.Data[1] - '0'), ID: id, Text: text})
 			}
 			if n.Data == "h1" && firstH1 == "" {
 				firstH1 = text

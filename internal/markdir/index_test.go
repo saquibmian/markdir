@@ -1,17 +1,10 @@
-package main
+package markdir
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 )
-
-func displayName(e IndexEntry) string {
-	if e.IsDir {
-		return e.Name + "/"
-	}
-	return e.Name
-}
 
 func TestListDirFilterAndSort(t *testing.T) {
 	// Note: no names that differ only by case — case-insensitive filesystems
@@ -37,9 +30,10 @@ func TestListDirFilterAndSort(t *testing.T) {
 
 	var names []string
 	for _, e := range entries {
-		names = append(names, displayName(e))
+		names = append(names, e.Name)
 	}
-	want := []string{"ai/", "sub/", "a.md", "ai.md", "bo.md"}
+	// Directories (ai/, sub/) and non-markdown files are excluded.
+	want := []string{"a.md", "ai.md", "bo.md"}
 	if len(names) != len(want) {
 		t.Fatalf("entries = %v, want %v", names, want)
 	}

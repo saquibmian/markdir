@@ -7,7 +7,7 @@ the left and a table of contents on the right, plus directory indexes.
 ## Usage
 
 ```sh
-go build -o .bin/markdir .
+go build -o .bin/markdir ./cmd/markdir
 MD_DIR=/path/to/docs PORT=8080 .bin/markdir
 ```
 
@@ -42,7 +42,7 @@ README.md
 | ----------------- | --------------------------------------------------- |
 | `/`               | `README.md`, rendered (GitHub-style, any dir route serves its own `README.md` if present) |
 | `/README.md`      | same as `/`                                          |
-| `/docs`           | index page: `ai/`, `ai.md` (immediate children only) |
+| `/docs`           | index page: `ai.md` (immediate `.md` files; subdirs are in the tree) |
 | `/docs/ai.md`     | `docs/ai.md`, rendered                               |
 | `/docs/ai`        | index page: `hello.md`                               |
 | `/docs/ai/hello.md` | `docs/ai/hello.md`, rendered                       |
@@ -50,9 +50,11 @@ README.md
 - **Doc pages** show a file tree (expanded only along the path to the current
   file) and a clickable TOC built from headings. The current file is
   highlighted in the tree.
-- **Index pages** list only immediate child directories and `.md` files,
-  centered. Nothing else renders — text files, images, and binaries 404 even
-  on direct request.
+- **Index pages** render in the same layout as doc pages — the file tree on
+  the left, expanded to the current directory — but show only the directory's
+  markdown files in the main area (subdirectories are navigated via the
+  tree), with no TOC. Nothing else renders — text files, images, and
+  binaries 404 even on direct request.
 - Markdown renders with GitHub-flavored extensions (tables, strikethrough,
   task lists, autolinks) and GitHub-style syntax highlighting for fenced
   code blocks. Raw HTML embedded in markdown is rendered as-is.
@@ -80,7 +82,7 @@ README.md
 go test ./...   # fixtures are built in temp dirs; no setup needed
 ```
 
-The vendored `styles.css` is
+The vendored `internal/markdir/styles.css` is
 [github-markdown-css](https://github.com/sindresorhus/github-markdown-css)
 (MIT, kept with its license header); it is the only file embedded in the
 binary. Syntax-highlighting CSS and the layout CSS are generated and

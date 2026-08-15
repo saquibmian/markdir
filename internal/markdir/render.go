@@ -1,4 +1,4 @@
-package main
+package markdir
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -18,8 +19,8 @@ import (
 	xhtml "golang.org/x/net/html"
 )
 
-// newMarkdown builds the goldmark engine. Constructed once in New; goldmark
-// is safe for concurrent use.
+// newMarkdown builds the goldmark engine. Constructed once in NewHandler;
+// goldmark is safe for concurrent use.
 func newMarkdown() goldmark.Markdown {
 	return goldmark.New(
 		goldmark.WithExtensions(extension.GFM),
@@ -32,16 +33,16 @@ func newMarkdown() goldmark.Markdown {
 	)
 }
 
-type DocPage struct {
+type docPage struct {
 	Title string
 	Body  template.HTML // the rendered markdown; the only unescaped field
-	Tree  *Node
-	Toc   []TocEntry
+	Tree  *node
+	Toc   []tocEntry
 }
 
 // renderDoc reads a markdown file from disk (never cached), renders it, and
 // serves the doc page with tree and TOC.
-func (s *Server) renderDoc(w http.ResponseWriter, r *http.Request, rt route) {
+func (s *server) renderDoc(w http.ResponseWriter, r *http.Request, rt route) {
 	src, err := os.ReadFile(rt.diskPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -66,28 +67,35 @@ func (s *Server) renderDoc(w http.ResponseWriter, r *http.Request, rt route) {
 	if title == "" {
 		title = strings.TrimSuffix(filepath.Base(rt.diskPath), filepath.Ext(rt.diskPath))
 	}
-	tree, err := buildTree(s.root, s.realRoot, rt.urlPath)
+	tree, err := buildTree(s.root, s.realRoot, path.Dir(rt.urlPath), rt.urlPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	page := DocPage{
+	page := docPage{
 		Title: title + " · markdir",
 		Body:  template.HTML(body.String()),
 		Tree:  tree,
 		Toc:   toc,
 	}
-	s.writeHTML(w, s.docTpl, page, rt.diskPath)
+	s.writeHTML(w, "doc", page, rt.diskPath)
 }
 
-type IndexPage struct {
+type indexPage struct {
 	Title   string
-	Entries []IndexEntry
+	Entries []indexEntry
+	Tree    *node
 }
 
-// renderIndex serves the centered children listing for a directory.
-func (s *Server) renderIndex(w http.ResponseWriter, rt route) {
+// renderIndex serves the children listing for a directory, in the same
+// layout as a doc page (tree on the left) but without content or TOC.
+func (s *server) renderIndex(w http.ResponseWriter, rt route) {
 	entries, err := listDir(s.realRoot, rt.diskPath, rt.urlPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tree, err := buildTree(s.root, s.realRoot, rt.urlPath, rt.urlPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -98,14 +106,14 @@ func (s *Server) renderIndex(w http.ResponseWriter, rt route) {
 	} else {
 		title += " · markdir"
 	}
-	s.writeHTML(w, s.indexTpl, IndexPage{Title: title, Entries: entries}, rt.diskPath)
+	s.writeHTML(w, "index", indexPage{Title: title, Entries: entries, Tree: tree}, rt.diskPath)
 }
 
 // writeHTML renders into a buffer first so template errors are reported
 // before any bytes hit the wire.
-func (s *Server) writeHTML(w http.ResponseWriter, tpl *template.Template, page any, diskPath string) {
+func (s *server) writeHTML(w http.ResponseWriter, name string, page any, diskPath string) {
 	var buf bytes.Buffer
-	if err := tpl.Execute(&buf, page); err != nil {
+	if err := pagesTpl.ExecuteTemplate(&buf, name, page); err != nil {
 		log.Printf("render %s: %v", diskPath, err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

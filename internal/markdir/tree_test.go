@@ -1,12 +1,13 @@
-package main
+package markdir
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 )
 
-func findKid(n *Node, name string) *Node {
+func findKid(n *node, name string) *node {
 	for _, k := range n.Kids {
 		if k.Name == name {
 			return k
@@ -15,7 +16,7 @@ func findKid(n *Node, name string) *Node {
 	return nil
 }
 
-func testTree(t *testing.T, files map[string]string, currentURL string) *Node {
+func testTree(t *testing.T, files map[string]string, currentURL string) *node {
 	t.Helper()
 	dir := t.TempDir()
 	writeFiles(t, dir, files)
@@ -23,7 +24,7 @@ func testTree(t *testing.T, files map[string]string, currentURL string) *Node {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, err := buildTree(dir, realRoot, currentURL)
+	tree, err := buildTree(dir, realRoot, path.Dir(currentURL), currentURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +132,7 @@ func TestTreeSkipsEscapingSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, err := buildTree(dir, realRoot, "/README.md")
+	tree, err := buildTree(dir, realRoot, "/", "/README.md")
 	if err != nil {
 		t.Fatal(err)
 	}

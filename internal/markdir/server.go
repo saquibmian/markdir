@@ -1,9 +1,8 @@
-package main
+package markdir
 
 import (
 	"errors"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -29,17 +28,17 @@ type route struct {
 	urlPath  string // canonical URL path of the route: the file for docs, the dir for indexes
 }
 
-// Server renders a directory of markdown files over HTTP.
-type Server struct {
+// server renders a directory of markdown files over HTTP.
+type server struct {
 	root     string // absolute, cleaned MD_DIR
 	realRoot string // EvalSymlinks(root), the containment boundary
 	md       goldmark.Markdown
-	docTpl   *template.Template
-	indexTpl *template.Template
 	css      []byte
 }
 
-func New(root string) (*Server, error) {
+// NewHandler returns an HTTP handler that serves the markdown files under
+// root. Every request reads from disk, so edits show up on refresh.
+func NewHandler(root string) (http.Handler, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -56,17 +55,15 @@ func New(root string) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve %s: %w", abs, err)
 	}
-	return &Server{
+	return &server{
 		root:     abs,
 		realRoot: realRoot,
 		md:       newMarkdown(),
-		docTpl:   docTpl,
-		indexTpl: indexTpl,
 		css:      assembleCSS(),
 	}, nil
 }
 
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -94,7 +91,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // resolve maps a URL path to a route. It returns errNotFound for anything
 // that does not resolve to a markdown file or directory inside root.
-func (s *Server) resolve(urlPath string) (route, error) {
+func (s *server) resolve(urlPath string) (route, error) {
 	p := path.Clean(urlPath)
 	rel := filepath.FromSlash(strings.TrimPrefix(p, "/"))
 	disk := filepath.Join(s.root, rel)

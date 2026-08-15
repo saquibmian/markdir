@@ -1,4 +1,4 @@
-package main
+package markdir
 
 import (
 	"strings"
@@ -22,7 +22,7 @@ func TestExtractTOC(t *testing.T) {
 	if first != "Top" {
 		t.Errorf("firstH1 = %q, want Top", first)
 	}
-	want := []TocEntry{
+	want := []tocEntry{
 		{Level: 1, ID: "h1", Text: "Top"},
 		{Level: 2, ID: "h2-bold", Text: "H2 bold"},
 		{Level: 3, ID: "h3-with-code", Text: "H3 with code"},

@@ -1,4 +1,4 @@
-package main
+package markdir
 
 import (
 	"bytes"
@@ -35,10 +35,11 @@ func assembleCSS() []byte {
 	return buf.Bytes()
 }
 
-var docTpl = template.Must(template.New("doc").Parse(docHTML))
-var indexTpl = template.Must(template.New("index").Parse(indexHTML))
+// pagesTpl holds the doc and index page templates plus the shared treeNode
+// template, all in one set so the tree markup is defined once.
+var pagesTpl = template.Must(template.New("pages").Parse(pagesHTML))
 
-const docHTML = `<!DOCTYPE html>
+const pagesHTML = `{{define "doc"}}<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -47,7 +48,7 @@ const docHTML = `<!DOCTYPE html>
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<div class="layout">
+<div class="layout{{if not .Toc}} no-toc{{end}}">
   <aside class="tree"><ul class="root">{{template "treeNode" .Tree}}</ul></aside>
   <main class="markdown-body doc">{{.Body}}</main>
   {{if .Toc}}<nav class="toc">
@@ -57,10 +58,8 @@ const docHTML = `<!DOCTYPE html>
 </div>
 </body>
 </html>
-{{define "treeNode"}}<li>{{if .IsDir}}<a href="{{.URL}}">{{.Name}}/</a>{{else}}<a href="{{.URL}}"{{if .Active}} class="active"{{end}}>{{.Name}}</a>{{end}}{{if .Kids}}<ul>{{range .Kids}}{{template "treeNode" .}}{{end}}</ul>{{end}}</li>{{end}}
-`
-
-const indexHTML = `<!DOCTYPE html>
+{{end}}
+{{define "index"}}<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -69,12 +68,17 @@ const indexHTML = `<!DOCTYPE html>
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<main class="index-wrap">
-{{if .Entries}}<ul class="index">{{range .Entries}}<li><a href="{{.URL}}">{{.Name}}{{if .IsDir}}/{{end}}</a></li>{{end}}</ul>
-{{else}}<p class="index-empty">This directory is empty.</p>{{end}}
-</main>
+<div class="layout no-toc">
+  <aside class="tree"><ul class="root">{{template "treeNode" .Tree}}</ul></aside>
+  <main class="doc">
+    {{if .Entries}}<ul class="index">{{range .Entries}}<li><a href="{{.URL}}">{{.Name}}</a></li>{{end}}</ul>
+    {{else}}<p class="index-empty">This directory is empty.</p>{{end}}
+  </main>
+</div>
 </body>
 </html>
+{{end}}
+{{define "treeNode"}}<li><a href="{{.URL}}"{{if .Active}} class="active"{{end}}>{{.Name}}{{if .IsDir}}/{{end}}</a>{{if .Kids}}<ul>{{range .Kids}}{{template "treeNode" .}}{{end}}</ul>{{end}}</li>{{end}}
 `
 
 const appLayoutCSS = `
@@ -118,6 +122,9 @@ a:hover { text-decoration: underline; }
   margin: 0 auto;
   padding: 24px;
 }
+/* Pages without a TOC (index pages, docs without headings) drop the
+   trailing 240px column so the content takes the full width. */
+.layout.no-toc { grid-template-columns: 260px minmax(0, 1fr); }
 
 .tree {
   position: sticky;
@@ -160,16 +167,8 @@ a:hover { text-decoration: underline; }
 .toc .toc-h5 { padding-left: 48px; }
 .toc .toc-h6 { padding-left: 60px; }
 
-.index-wrap {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
 .index { list-style: none; margin: 0; padding: 0; font-size: 18px; }
-.index li { padding: 6px 0; text-align: center; }
+.index li { padding: 6px 0; }
 .index-empty { color: var(--fgColor-muted); }
 
 @media (max-width: 1100px) {

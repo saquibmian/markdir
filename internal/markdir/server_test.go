@@ -1,4 +1,4 @@
-package main
+package markdir
 
 import (
 	"net/http"
@@ -9,13 +9,13 @@ import (
 	"testing"
 )
 
-// newFixture builds a Server over a temp dir containing the given files
+// newFixture builds a handler over a temp dir containing the given files
 // (paths relative to the root; parent dirs are created).
-func newFixture(t *testing.T, files map[string]string) *Server {
+func newFixture(t *testing.T, files map[string]string) http.Handler {
 	t.Helper()
 	dir := t.TempDir()
 	writeFiles(t, dir, files)
-	s, err := New(dir)
+	s, err := NewHandler(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func writeFiles(t *testing.T, dir string, files map[string]string) {
 	}
 }
 
-func get(t *testing.T, s *Server, target string) *httptest.ResponseRecorder {
+func get(t *testing.T, s http.Handler, target string) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
@@ -62,7 +62,7 @@ func mustNotContain(t *testing.T, body string, banned ...string) {
 }
 
 // specFixture mirrors the example from the spec plus poison entries.
-func specFixture(t *testing.T) *Server {
+func specFixture(t *testing.T) http.Handler {
 	return newFixture(t, map[string]string{
 		"README.md":        "# Root Readme\n\nintro text\n",
 		"docs/ai.md":       "# Docs AI\n\ndocs ai doc\n",
@@ -87,12 +87,12 @@ func TestRoutes(t *testing.T) {
 		{"README.md same as root", "/README.md", 200,
 			[]string{"Root Readme", `href="/README.md" class="active"`}, []string{`href="/docs/ai.md"`}},
 		{"docs index", "/docs", 200,
-			[]string{"ai/", `href="/docs/ai">`, `href="/docs/ai.md"`},
-			[]string{"hello.md", "notes.txt", ".hidden.md", `class="tree"`, `class="toc"`}},
+			[]string{"ai/", `href="/docs/ai">`, `href="/docs/ai.md"`, `href="/docs" class="active"`, `class="tree"`},
+			[]string{"hello.md", "notes.txt", ".hidden.md", `class="toc"`}},
 		{"docs ai.md doc", "/docs/ai.md", 200,
 			[]string{"Docs AI", `href="/docs/ai.md" class="active"`, `href="/docs/ai">`}, nil},
 		{"docs ai index", "/docs/ai", 200,
-			[]string{"hello.md", `href="/docs/ai/hello.md"`}, []string{"ai.md", `class="tree"`}},
+			[]string{"hello.md", `href="/docs/ai/hello.md"`, `href="/docs/ai" class="active"`, `class="tree"`}, nil},
 		{"nested doc", "/docs/ai/hello.md", 200,
 			[]string{"hello world", `href="/docs/ai/hello.md" class="active"`, `href="/docs/ai.md"`, `href="/docs/ai">`}, nil},
 		{"missing", "/nope", 404, nil, nil},
@@ -149,8 +149,7 @@ func TestHiddenFileDirect(t *testing.T) {
 func TestRootWithoutReadme(t *testing.T) {
 	s := newFixture(t, map[string]string{"docs/ai.md": "# AI\n"})
 	body := get(t, s, "/").Body.String()
-	mustContain(t, body, "docs/", `href="/docs">`)
-	mustNotContain(t, body, `class="tree"`)
+	mustContain(t, body, "docs/", `href="/docs">`, `class="tree"`, `href="/" class="active"`)
 }
 
 func TestMethodNotAllowed(t *testing.T) {
@@ -193,7 +192,7 @@ func TestRefreshSeesUpdates(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "hello.md"), []byte("v1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s, err := New(dir)
+	s, err := NewHandler(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +220,7 @@ func TestSymlinkSafety(t *testing.T) {
 	if err := os.Symlink("/etc", filepath.Join(dir, "docs", "escape")); err != nil {
 		t.Fatal(err)
 	}
-	s, err := New(dir)
+	s, err := NewHandler(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

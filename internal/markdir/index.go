@@ -1,4 +1,4 @@
-package main
+package markdir
 
 import (
 	"os"
@@ -7,22 +7,22 @@ import (
 	"strings"
 )
 
-// IndexEntry is one line of an index page. Name is the on-disk name;
-// directories get a trailing "/" at render time.
-type IndexEntry struct {
-	Name  string
-	URL   string
-	IsDir bool
+// indexEntry is one line of an index page: a markdown file directly inside
+// the directory. Subdirectories never appear here — they are navigated via
+// the tree.
+type indexEntry struct {
+	Name string
+	URL  string
 }
 
-// listDir returns the visible children of a directory: directories and
-// markdown files only, sorted directories-first then case-insensitively.
-func listDir(realRoot, dirDisk, dirURL string) ([]IndexEntry, error) {
+// listDir returns the visible markdown files directly inside dirDisk,
+// sorted case-insensitively.
+func listDir(realRoot, dirDisk, dirURL string) ([]indexEntry, error) {
 	entries, err := os.ReadDir(dirDisk)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]IndexEntry, 0, len(entries))
+	out := make([]indexEntry, 0, len(entries))
 	for _, e := range entries {
 		name := e.Name()
 		if strings.HasPrefix(name, ".") {
@@ -37,14 +37,13 @@ func listDir(realRoot, dirDisk, dirURL string) ([]IndexEntry, error) {
 		if err != nil {
 			continue
 		}
-		isDir := info.IsDir()
-		if !isDir && !strings.EqualFold(filepath.Ext(name), ".md") {
+		if info.IsDir() || !strings.EqualFold(filepath.Ext(name), ".md") {
 			continue
 		}
-		out = append(out, IndexEntry{Name: name, URL: urlJoin(dirURL, name), IsDir: isDir})
+		out = append(out, indexEntry{Name: name, URL: urlJoin(dirURL, name)})
 	}
 	sort.Slice(out, func(i, j int) bool {
-		return nameLess(out[i].Name, out[j].Name, out[i].IsDir, out[j].IsDir)
+		return nameLess(out[i].Name, out[j].Name, false, false)
 	})
 	return out, nil
 }

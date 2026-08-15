@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+
+	"markdir/internal/markdir"
 )
 
 func main() {
@@ -16,13 +19,17 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	srv, err := New(root)
+	h, err := markdir.NewHandler(root)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "markdir: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("markdir: serving %s at http://localhost:%s\n", srv.root, port)
-	if err := http.ListenAndServe(":"+port, srv); err != nil {
+	abs, err := filepath.Abs(filepath.Clean(root))
+	if err != nil {
+		abs = root
+	}
+	fmt.Printf("markdir: serving %s at http://localhost:%s\n", abs, port)
+	if err := http.ListenAndServe(":"+port, h); err != nil {
 		fmt.Fprintf(os.Stderr, "markdir: %v\n", err)
 		os.Exit(1)
 	}

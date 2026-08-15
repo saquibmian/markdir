@@ -1,44 +1,44 @@
-package main
+package markdir
 
 import (
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
-// Node is one entry in the file tree. Kids is nil when a directory is
+// node is one entry in the file tree. Kids is nil when a directory is
 // collapsed (not on the current file's path) or has no visible children.
 // Active marks the file being viewed.
-type Node struct {
+type node struct {
 	Name   string
 	URL    string
 	IsDir  bool
 	Active bool
-	Kids   []*Node
+	Kids   []*node
 }
 
-// buildTree returns the file tree for a doc page: the root is always
-// expanded, and only directories on the current file's path are expanded.
-func buildTree(root, realRoot, currentURL string) (*Node, error) {
-	currentDir := path.Dir(currentURL)
+// buildTree returns the file tree for a page: the root and the directories
+// on the path to currentDir are expanded, and the entry matching currentURL
+// is Active — the current file on doc pages, the current directory on index
+// pages. Directories below currentDir stay collapsed.
+func buildTree(root, realRoot, currentDir, currentURL string) (*node, error) {
 	visited := map[string]bool{realRoot: true}
 	kids, err := walkTree(root, "/", currentDir, currentURL, realRoot, visited)
 	if err != nil {
 		return nil, err
 	}
-	return &Node{Name: filepath.Base(root), URL: "/", IsDir: true, Kids: kids}, nil
+	return &node{Name: filepath.Base(root), URL: "/", IsDir: true, Active: currentURL == "/", Kids: kids}, nil
 }
 
 // walkTree lists dirDisk, recursing only into expanded directories. The
 // visited set (keyed on resolved real paths) terminates symlink loops.
-func walkTree(dirDisk, dirURL, currentDir, currentURL, realRoot string, visited map[string]bool) ([]*Node, error) {
+func walkTree(dirDisk, dirURL, currentDir, currentURL, realRoot string, visited map[string]bool) ([]*node, error) {
 	entries, err := os.ReadDir(dirDisk)
 	if err != nil {
 		return nil, err
 	}
-	nodes := make([]*Node, 0, len(entries))
+	nodes := make([]*node, 0, len(entries))
 	for _, e := range entries {
 		name := e.Name()
 		if strings.HasPrefix(name, ".") {
@@ -58,7 +58,7 @@ func walkTree(dirDisk, dirURL, currentDir, currentURL, realRoot string, visited 
 			continue
 		}
 		nodeURL := urlJoin(dirURL, name)
-		node := &Node{Name: name, URL: nodeURL, IsDir: isDir, Active: nodeURL == currentURL}
+		node := &node{Name: name, URL: nodeURL, IsDir: isDir, Active: nodeURL == currentURL}
 		if isDir {
 			expanded := nodeURL == currentDir || strings.HasPrefix(currentDir, nodeURL+"/")
 			if expanded && !visited[real] {
