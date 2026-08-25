@@ -69,6 +69,8 @@ func specFixture(t *testing.T) http.Handler {
 		"docs/ai/hello.md": "# Hello\n\nhello world\n",
 		"docs/notes.txt":   "not markdown",
 		"docs/.hidden.md":  "# Hidden\n",
+		"docs/diagram.png": "\x89PNG\r\n\x1a\n",
+		"docs/paper.pdf":   "%PDF-1.4",
 		"empty/.keep":      "",
 	})
 }
@@ -98,6 +100,8 @@ func TestRoutes(t *testing.T) {
 		{"missing", "/nope", 404, nil, nil},
 		{"missing md", "/docs/nope.md", 404, nil, nil},
 		{"non-md file", "/docs/notes.txt", 404, nil, nil},
+		{"static png not in index", "/docs", 200, nil, []string{"diagram.png", "paper.pdf"}},
+		{"static png not in tree", "/docs/ai.md", 200, nil, []string{"diagram.png", "paper.pdf"}},
 		{"extensionless", "/docs/ai/hello", 404, nil, nil},
 		{"trailing slash", "/docs/", 200, []string{"ai/", "ai.md"}, nil},
 		{"dotdot normalizes", "/docs/../README.md", 200, []string{"Root Readme"}, nil},
@@ -277,4 +281,62 @@ func TestHrefEscaping(t *testing.T) {
 	s := newFixture(t, map[string]string{"docs/a b.md": "# Space\n"})
 	mustContain(t, get(t, s, "/docs").Body.String(), `href="/docs/a%20b.md"`)
 	mustContain(t, get(t, s, "/docs/a%20b.md").Body.String(), "Space")
+}
+
+func TestStaticFiles(t *testing.T) {
+	s := newFixture(t, map[string]string{
+		"logo.png":      "\x89PNG\r\n\x1a\n",
+		"photo.jpg":     "fake jpg",
+		"photo.jpeg":    "fake jpeg",
+		"report.pdf":    "%PDF-1.4",
+		"styles.css":    "from disk",
+		"docs/ok.png":   "\x89PNG",
+		"docs/nope.gif": "GIF89a",
+	})
+
+	cases := []struct {
+		target      string
+		code        int
+		contentType string
+		body        string
+	}{
+		{"/logo.png", 200, "image/png", "\x89PNG\r\n\x1a\n"},
+		{"/photo.jpg", 200, "image/jpeg", "fake jpg"},
+		{"/photo.jpeg", 200, "image/jpeg", "fake jpeg"},
+		{"/report.pdf", 200, "application/pdf", "%PDF-1.4"},
+		{"/docs/ok.png", 200, "image/png", "\x89PNG"},
+		{"/docs/nope.gif", 404, "", ""},
+		{"/missing.png", 404, "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.target, func(t *testing.T) {
+			rec := get(t, s, c.target)
+			if rec.Code != c.code {
+				t.Fatalf("status = %d, want %d", rec.Code, c.code)
+			}
+			if c.contentType != "" {
+				if got := rec.Header().Get("Content-Type"); got != c.contentType {
+					t.Errorf("Content-Type = %q, want %q", got, c.contentType)
+				}
+			}
+			if c.body != "" && rec.Body.String() != c.body {
+				t.Errorf("body = %q, want %q", rec.Body.String(), c.body)
+			}
+		})
+	}
+
+	// In-memory /styles.css wins over a disk file of the same name.
+	rec := get(t, s, "/styles.css")
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "from disk") {
+		t.Errorf("/styles.css served from disk instead of in-memory CSS")
+	}
+	if !strings.Contains(rec.Body.String(), ".markdown-body") {
+		t.Errorf("/styles.css missing expected in-memory CSS")
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/css") {
+		t.Errorf("Content-Type = %q, want text/css", ct)
+	}
 }
