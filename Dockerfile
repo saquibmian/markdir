@@ -8,7 +8,6 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/markdir ./cmd/markdir
 
 FROM scratch
-LABEL version="0.2.0"
 COPY --from=build /out/markdir /markdir
 ENV MD_DIR=/docs
 VOLUME ["/docs"]
