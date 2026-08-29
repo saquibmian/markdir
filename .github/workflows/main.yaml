@@ -20,4 +20,4 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: r.home.saquib.me/markdir:latest,r.home.saquib.me/markdir:1
+          tags: r.home.saquib.me/markdir:latest,r.home.saquib.me/markdir:2
