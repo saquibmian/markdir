@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,6 +18,7 @@ import (
 const (
 	routeDoc = iota
 	routeIndex
+	routeStatic
 )
 
 var errNotFound = errors.New("not found")
@@ -86,6 +88,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.renderDoc(w, r, rt)
 	case routeIndex:
 		s.renderIndex(w, rt)
+	case routeStatic:
+		s.serveStatic(w, r, rt)
 	}
 }
 
@@ -125,10 +129,54 @@ func (s *server) resolve(urlPath string) (route, error) {
 		}
 		return route{kind: routeIndex, diskPath: real, urlPath: p}, nil
 	}
-	if !strings.EqualFold(filepath.Ext(real), ".md") {
-		return route{}, errNotFound
+	if strings.EqualFold(filepath.Ext(real), ".md") {
+		return route{kind: routeDoc, diskPath: real, urlPath: p}, nil
 	}
-	return route{kind: routeDoc, diskPath: real, urlPath: p}, nil
+	if isStaticFile(real) {
+		return route{kind: routeStatic, diskPath: real, urlPath: p}, nil
+	}
+	return route{}, errNotFound
+}
+
+// staticExts lists file extensions that may be served straight from disk.
+var staticExts = map[string]bool{
+	".png":  true,
+	".jpg":  true,
+	".jpeg": true,
+	".pdf":  true,
+}
+
+// isStaticFile reports whether a resolved disk file should be served as a
+// static asset based on its extension.
+func isStaticFile(diskPath string) bool {
+	return staticExts[strings.ToLower(filepath.Ext(diskPath))]
+}
+
+// serveStatic streams a file from disk with a content type derived from its
+// extension and the same no-store cache policy used for rendered pages.
+func (s *server) serveStatic(w http.ResponseWriter, r *http.Request, rt route) {
+	f, err := os.Open(rt.diskPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	ct := mime.TypeByExtension(filepath.Ext(rt.diskPath))
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeContent(w, r, rt.diskPath, info.ModTime(), f)
 }
 
 // findReadme prefers an exact README.md, falling back to a case-folded match.
